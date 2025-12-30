@@ -185,25 +185,29 @@
                             showStatus(response.message, 'success');
                             
                             if (response.profile_picture_url) {
-                                // Add cache busting timestamp
-                                const cacheBuster = '?t=' + new Date().getTime();
-                                const newUrl = response.profile_picture_url + (response.profile_picture_url.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
-                                
-                                updateProfileImageDOM(newUrl);
-                                
-                                // Update navbar image
-                                const navImg = document.querySelector('.profile img');
-                                if (navImg) {
-                                    navImg.src = newUrl;
-                                } else {
-                                    const navAvatar = document.querySelector('.header-avatar');
-                                    if (navAvatar) {
-                                        const newNavImg = document.createElement('img');
-                                        newNavImg.src = response.profile_picture_url;
-                                        newNavImg.alt = 'Profile Picture';
-                                        navAvatar.parentNode.replaceChild(newNavImg, navAvatar);
+                                // Add cache busting and update DOM when image loads
+                                const newUrl = response.profile_picture_url + (response.profile_picture_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                                const imgTest = new Image();
+                                imgTest.onload = function() {
+                                    updateProfileImageDOM(newUrl);
+                                    const navImg = document.querySelector('.profile img');
+                                    if (navImg) {
+                                        navImg.src = newUrl;
+                                    } else {
+                                        const navAvatar = document.querySelector('.header-avatar');
+                                        if (navAvatar) {
+                                            const newNavImg = document.createElement('img');
+                                            newNavImg.src = newUrl;
+                                            newNavImg.alt = 'Profile Picture';
+                                            navAvatar.parentNode.replaceChild(newNavImg, navAvatar);
+                                        }
                                     }
-                                }
+                                };
+                                imgTest.onerror = function() {
+                                    // Fallback: hard reload to reflect new asset
+                                    window.location.reload();
+                                };
+                                imgTest.src = newUrl;
                             }
                         } catch (e) {
                             showStatus('Upload successful, but failed to parse response.', 'success');
