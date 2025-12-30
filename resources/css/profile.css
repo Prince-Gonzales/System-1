@@ -119,6 +119,10 @@ body {
     text-align: center;
     margin-top: 10px;
 }
+.btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
 .btn-danger {
     background: red;
 }
@@ -301,4 +305,27 @@ background:rgb(235, 79, 79);
     margin-top: 5px;
     color: #666;
     font-size: 0.9em;
+}
+
+/* Progress Bar */
+.progress-container {
+    width: 100%;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    margin-top: 15px;
+    overflow: hidden;
+    display: none;
+}
+.progress-bar {
+    width: 0%;
+    height: 10px;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+.upload-status {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #555;
+    text-align: center;
+    min-height: 20px;
 }

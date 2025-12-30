@@ -8,6 +8,33 @@ use App\Http\Controllers\Auth\VerificationController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+Route::get('/health-check', function () {
+    $config = [
+        'db_default' => config('database.default'),
+        'env_db_connection' => env('DB_CONNECTION'),
+        'session_connection' => config('session.connection'),
+        'pgsql_host' => config('database.connections.pgsql.host'),
+    ];
+    try {
+        $pdo = DB::connection()->getPdo();
+        Log::info('Database connection successful', $config);
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'Database connection successful',
+            'context' => $config,
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Database connection failed', ['error' => $e->getMessage()] + $config);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Database connection failed: ' . $e->getMessage(),
+            'context' => $config,
+        ], 500);
+    }
+});
 
 Route::middleware(['auth', 'idle'])->group(function () {
     Route::get('/', [HomeController::class, 'index'])->name('home');

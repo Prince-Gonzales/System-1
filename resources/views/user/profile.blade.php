@@ -48,15 +48,20 @@
                 </div>
                 <span class="modal-close" onclick="closeImageModal()" style="position:absolute;top:15px;right:25px;color:#f1f1f1;font-size:30px;font-weight:bold;cursor:pointer;background:rgba(0,0,0,0.6);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.4);">&times;</span>
             </div>
-            <form action="{{ route('profile.update') }}" method="POST" enctype="multipart/form-data"
-                  class="profile-upload-form" onsubmit="console.log('Form submitting', new FormData(this))">
+            <form id="profilePictureForm" action="{{ route('profile.update') }}" method="POST" enctype="multipart/form-data" class="profile-upload-form">
                 @csrf
                 <div class="form-group">
                     <label for="profile_picture">Change Profile Picture</label>
-                    <input type="file" name="profile_picture" id="profile_picture" accept="image/*">
+                    <input type="file" name="profile_picture" id="profile_picture" accept="image/png, image/jpeg, image/jpg, image/gif, image/webp">
                     <small>Image files only (PNG, JPEG, JPG, GIF, WEBP). Max size: 30MB</small>
                 </div>
-                <button name="update-profile-picture" type="submit" class="btn">Upload Picture</button>
+                
+                <div id="uploadProgress" class="progress-container">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <div id="uploadStatus" class="upload-status"></div>
+
+                <button name="update-profile-picture" type="submit" class="btn" id="uploadButton">Upload Picture</button>
             </form>
             @error('profile_picture')
                 <div class="error-messages">
@@ -69,6 +74,7 @@
             document.addEventListener('DOMContentLoaded', function() {
                 const profilePictureInput = document.getElementById('profile_picture');
                 const currentProfilePicture = document.getElementById('currentProfilePicture');
+                const profilePictureForm = document.getElementById('profilePictureForm');
                 
                 // Store the original profile picture source to allow reverting
                 let originalProfilePictureSrc = null;
@@ -81,39 +87,151 @@
                 profilePictureInput.addEventListener('change', function(event) {
                     const file = event.target.files[0];
                     if (file) {
+                        // Validation for preview
+                        const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+                        if (!validTypes.includes(file.type)) {
+                            showStatus('Invalid file type for preview.', 'error');
+                            return;
+                        }
+
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            if (currentProfilePicture.tagName === 'IMG') {
-                                currentProfilePicture.src = e.target.result;
-                                // Update onclick to show preview of selected image
-                                currentProfilePicture.setAttribute('onclick', `openImageModal('${e.target.result}')`);
-                            } else {
-                                // Convert div to img for better preview handling
-                                const img = document.createElement('img');
-                                img.src = e.target.result;
-                                img.alt = 'Profile Picture';
-                                img.className = 'profile-picture';
-                                img.id = 'currentProfilePicture';
-                                img.setAttribute('onclick', `openImageModal('${e.target.result}')`);
-                                currentProfilePicture.parentNode.replaceChild(img, currentProfilePicture);
-                                // Update reference for future operations
-                                currentProfilePicture = document.getElementById('currentProfilePicture');
-                            }
+                            updateProfileImageDOM(e.target.result);
                         };
                         reader.readAsDataURL(file);
                     } else {
                         // Revert to original profile picture when file selection is cancelled
                         if (originalProfilePictureSrc) {
-                            if (currentProfilePicture.tagName === 'IMG') {
-                                currentProfilePicture.src = originalProfilePictureSrc;
-                                currentProfilePicture.setAttribute('onclick', `openImageModal('${originalProfilePictureSrc}')`);
-                            } else {
-                                currentProfilePicture.style.backgroundImage = originalProfilePictureSrc;
-                            }
+                            updateProfileImageDOM(originalProfilePictureSrc);
                         }
                     }
                 });
+
+                profilePictureForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    uploadProfilePicture();
+                });
             });
+
+            function updateProfileImageDOM(src) {
+                let currentProfilePicture = document.getElementById('currentProfilePicture');
+                if (currentProfilePicture.tagName === 'IMG') {
+                    currentProfilePicture.src = src;
+                    currentProfilePicture.setAttribute('onclick', `openImageModal('${src}')`);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = src;
+                    img.alt = 'Profile Picture';
+                    img.className = 'profile-picture';
+                    img.id = 'currentProfilePicture';
+                    img.setAttribute('onclick', `openImageModal('${src}')`);
+                    currentProfilePicture.parentNode.replaceChild(img, currentProfilePicture);
+                }
+            }
+
+            function uploadProfilePicture() {
+                const input = document.getElementById('profile_picture');
+                const file = input.files[0];
+                
+                if (!file) {
+                    showStatus('Please select a file first.', 'error');
+                    return;
+                }
+
+                // Client-side validation
+                const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    showStatus('Invalid file type. Please select an image.', 'error');
+                    return;
+                }
+
+                const maxSize = 30 * 1024 * 1024; // 30MB
+                if (file.size > maxSize) {
+                    showStatus('File size exceeds 30MB limit.', 'error');
+                    return;
+                }
+
+                const formData = new FormData(document.getElementById('profilePictureForm'));
+                formData.append('update-profile-picture', '1'); 
+
+                const xhr = new XMLHttpRequest();
+                const progressBar = document.getElementById('progressBar');
+                const progressContainer = document.getElementById('uploadProgress');
+                const uploadButton = document.getElementById('uploadButton');
+
+                progressContainer.style.display = 'block';
+                uploadButton.disabled = true;
+                showStatus('Uploading...', 'info');
+
+                xhr.open('POST', '{{ route('profile.update') }}', true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('Accept', 'application/json');
+
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressBar.style.width = percentComplete + '%';
+                    }
+                };
+
+                xhr.onload = function() {
+                    uploadButton.disabled = false;
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            showStatus(response.message, 'success');
+                            
+                            if (response.profile_picture_url) {
+                                // Add cache busting timestamp
+                                const cacheBuster = '?t=' + new Date().getTime();
+                                const newUrl = response.profile_picture_url + (response.profile_picture_url.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+                                
+                                updateProfileImageDOM(newUrl);
+                                
+                                // Update navbar image
+                                const navImg = document.querySelector('.profile img');
+                                if (navImg) {
+                                    navImg.src = newUrl;
+                                } else {
+                                    const navAvatar = document.querySelector('.header-avatar');
+                                    if (navAvatar) {
+                                        const newNavImg = document.createElement('img');
+                                        newNavImg.src = response.profile_picture_url;
+                                        newNavImg.alt = 'Profile Picture';
+                                        navAvatar.parentNode.replaceChild(newNavImg, navAvatar);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            showStatus('Upload successful, but failed to parse response.', 'success');
+                        }
+                    } else {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            showStatus(response.message || 'Upload failed.', 'error');
+                        } catch (e) {
+                            showStatus('An error occurred during upload (' + xhr.status + ').', 'error');
+                        }
+                    }
+                };
+
+                xhr.onerror = function() {
+                    uploadButton.disabled = false;
+                    progressContainer.style.display = 'none';
+                    showStatus('Network error. Please check your connection.', 'error');
+                };
+
+                xhr.send(formData);
+            }
+
+            function showStatus(message, type) {
+                const statusDiv = document.getElementById('uploadStatus');
+                statusDiv.textContent = message;
+                statusDiv.style.color = type === 'error' ? 'red' : (type === 'success' ? 'green' : '#555');
+            }
 
             // Modal functions for full image preview
             function openImageModal(imageSrc) {

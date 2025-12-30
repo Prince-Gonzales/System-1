@@ -25,7 +25,7 @@ class ProfileController extends Controller
 
     public function update(
         Request $request
-    ): RedirectResponse {
+    ) {
         $user = $request->user()->fresh();
 
         if ($request->has('update-profile-picture')) {
@@ -64,7 +64,7 @@ class ProfileController extends Controller
         return back();
     }
 
-    private function updateProfilePicture(Request $request, $user): RedirectResponse
+    private function updateProfilePicture(Request $request, $user)
     {
         try {
             $validated = $request->validate((new UploadProfilePictureRequest())->rules());
@@ -101,6 +101,16 @@ class ProfileController extends Controller
 
             $user->update(['profile_picture' => $path]);
 
+            // Clear any output buffers to ensure clean JSON response
+            if (ob_get_length()) ob_clean();
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Profile picture updated successfully!',
+                    'profile_picture_url' => \App\Helpers\ProfilePictureHelper::getProfilePictureUrl($path),
+                ]);
+            }
+
             return back()->with('success', ['update-profile' => 'Profile picture updated successfully!']);
         } catch (\Exception $e) {
             Log::error('Profile picture upload failed', [
@@ -108,6 +118,12 @@ class ProfileController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Failed to upload profile picture: ' . $e->getMessage(),
+                ], 500);
+            }
 
             return back()->withErrors(['profile_picture' => 'Failed to upload profile picture: ' . $e->getMessage()])->withInput();
         }
